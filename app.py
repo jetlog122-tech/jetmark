@@ -1,72 +1,108 @@
-from flask import Flask, jsonify, request, render_template_string
+from flask import Flask, render_template_string, request, redirect, url_for
 
 app = Flask(__name__)
 
-# Temporary storage (clears when you restart the server)
-students = []
+# Temporary list to store student data
+students_db = []
 
-# Simple HTML template to display the form and the results
+# --- HTML TEMPLATE ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Grade Checker</title>
+    <meta charset="UTF-8">
+    <title>Student Grade Management</title>
     <style>
-        body { font-family: sans-serif; margin: 40px; line-height: 1.6; }
-        .pass { color: green; font-weight: bold; }
-        .fail { color: red; font-weight: bold; }
-        input { margin-bottom: 10px; display: block; padding: 5px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; padding: 40px; }
+        .container { max-width: 600px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: auto; }
+        h2 { color: #333; text-align: center; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background-color: #28a745; color: white; border: none; border-radius: 5px; margin-top: 20px; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #218838; }
+        table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f8f9fa; }
+        .pass { color: #28a745; font-weight: bold; }
+        .fail { color: #dc3545; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h2>Enter Student Details</h2>
-    <form method="POST" action="/add_student">
-        <input type="text" name="name" placeholder="Student Name" required>
-        <input type="text" name="section" placeholder="Section" required>
-        <input type="number" name="grade" placeholder="Grade (0-100)" required>
-        <button type="submit">Submit</button>
+
+<div class="container">
+    <h2>Student Grade Management</h2>
+    
+    <form action="/add" method="POST">
+        <label>Student Name:</label>
+        <input type="text" name="name" placeholder="e.g. Juan Dela Cruz" required>
+        
+        <label>Section:</label>
+        <input type="text" name="section" placeholder="e.g. Zechariah" required>
+        
+        <label>Final Grade:</label>
+        <input type="number" step="0.01" name="grade" placeholder="0-100" required>
+        
+        <button type="submit">Save Student Record</button>
     </form>
 
     <hr>
 
-    <h2>Student List</h2>
-    <ul>
-        {% for s in students %}
-            <li>
-                <strong>{{ s.name }}</strong> (Section: {{ s.section }}) - 
-                Grade: {{ s.grade }} - 
-                Status: <span class="{{ s.status.lower() }}">{{ s.status }}</span>
-            </li>
-        {% endfor %}
-    </ul>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Section</th>
+                <th>Grade</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in students %}
+            <tr>
+                <td>{{ s.name }}</td>
+                <td>{{ s.section }}</td>
+                <td>{{ s.grade }}</td>
+                <td>
+                    <span class="{{ 'pass' if s.status == 'PASSED' else 'fail' }}">
+                        {{ s.status }}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
 </body>
 </html>
 """
 
 @app.route('/')
-def home():
-    # We use render_template_string to keep everything in one file for now
-    return render_template_string(HTML_TEMPLATE, students=students)
+def index():
+    return render_template_string(HTML_TEMPLATE, students=students_db)
 
-@app.route('/add_student', methods=['POST'])
+@app.route('/add', methods=['POST'])
 def add_student():
     name = request.form.get('name')
     section = request.form.get('section')
-    grade = int(request.form.get('grade'))
+    # Use a default of 0 if grade is missing or invalid
+    try:
+        grade = float(request.form.get('grade', 0))
+    except ValueError:
+        grade = 0.0
 
-    # Passing Logic: 75 is the usual passing mark
-    status = "Pass" if grade >= 75 else "Fail"
+    # Logic: 75 and above is PASSED
+    status = "PASSED" if grade >= 75 else "FAILED"
 
-    # Save to our list
-    students.append({
+    # Add to our temporary list
+    students_db.append({
         "name": name,
         "section": section,
         "grade": grade,
         "status": status
     })
 
-    # Return to the home page to see the updated list
-    return render_template_string(HTML_TEMPLATE, students=students)
+    return redirect(url_for('index'))
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
