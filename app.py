@@ -13,18 +13,25 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <title>Student Grade Management</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; padding: 40px; }
-        .container { max-width: 600px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: auto; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f7f6; padding: 40px; }
+        .container { max-width: 800px; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: auto; }
         h2 { color: #333; text-align: center; }
-        label { display: block; margin-top: 10px; font-weight: bold; }
-        input { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; background-color: #28a745; color: white; border: none; border-radius: 5px; margin-top: 20px; cursor: pointer; font-size: 16px; }
-        button:hover { background-color: #218838; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button.save-btn { width: 100%; padding: 12px; background-color: #4f46e5; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; transition: 0.3s; }
+        button.save-btn:hover { background-color: #4338ca; }
+        
         table { width: 100%; border-collapse: collapse; margin-top: 30px; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background-color: #f8f9fa; }
-        .pass { color: #28a745; font-weight: bold; }
-        .fail { color: #dc3545; font-weight: bold; }
+        th, td { border-bottom: 1px solid #eee; padding: 12px; text-align: left; }
+        th { background-color: #f8f9fa; color: #666; }
+        
+        .status-badge { padding: 5px 10px; border-radius: 15px; font-size: 0.85rem; font-weight: bold; }
+        .pass { background: #dcfce7; color: #166534; }
+        .fail { background: #fee2e2; color: #991b1b; }
+        
+        .delete-btn { color: #dc3545; text-decoration: none; font-weight: bold; font-size: 0.9rem; }
+        .delete-btn:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -33,19 +40,20 @@ HTML_TEMPLATE = """
     <h2>Student Grade Management</h2>
     
     <form action="/add" method="POST">
-        <label>Student Name:</label>
-        <input type="text" name="name" placeholder="e.g. Juan Dela Cruz" required>
-        
-        <label>Section:</label>
-        <input type="text" name="section" placeholder="e.g. Zechariah" required>
-        
-        <label>Final Grade:</label>
-        <input type="number" step="0.01" name="grade" placeholder="0-100" required>
-        
-        <button type="submit">Save Student Record</button>
+        <div class="form-group">
+            <label>Student Name</label>
+            <input type="text" name="name" required>
+        </div>
+        <div class="form-group">
+            <label>Section</label>
+            <input type="text" name="section" required>
+        </div>
+        <div class="form-group">
+            <label>Final Grade</label>
+            <input type="number" step="0.1" name="grade" required>
+        </div>
+        <button type="submit" class="save-btn">Save Record</button>
     </form>
-
-    <hr>
 
     <table>
         <thead>
@@ -54,6 +62,7 @@ HTML_TEMPLATE = """
                 <th>Section</th>
                 <th>Grade</th>
                 <th>Status</th>
+                <th>Action</th>
             </tr>
         </thead>
         <tbody>
@@ -63,9 +72,12 @@ HTML_TEMPLATE = """
                 <td>{{ s.section }}</td>
                 <td>{{ s.grade }}</td>
                 <td>
-                    <span class="{{ 'pass' if s.status == 'PASSED' else 'fail' }}">
+                    <span class="status-badge {{ 'pass' if s.status == 'PASSED' else 'fail' }}">
                         {{ s.status }}
                     </span>
+                </td>
+                <td>
+                    <a href="/delete/{{ loop.index0 }}" class="delete-btn" onclick="return confirm('Delete this student?')">Delete</a>
                 </td>
             </tr>
             {% endfor %}
@@ -85,23 +97,26 @@ def index():
 def add_student():
     name = request.form.get('name')
     section = request.form.get('section')
-    # Use a default of 0 if grade is missing or invalid
     try:
         grade = float(request.form.get('grade', 0))
     except ValueError:
         grade = 0.0
 
-    # Logic: 75 and above is PASSED
     status = "PASSED" if grade >= 75 else "FAILED"
 
-    # Add to our temporary list
     students_db.append({
         "name": name,
         "section": section,
         "grade": grade,
         "status": status
     })
+    return redirect(url_for('index'))
 
+@app.route('/delete/<int:student_id>')
+def delete_student(student_id):
+    # Check if the index exists, then remove it
+    if 0 <= student_id < len(students_db):
+        students_db.pop(student_id)
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
