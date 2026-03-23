@@ -1,37 +1,18 @@
 from flask import Flask, render_template_string, request, redirect, url_for
-from flask_sqlalchemy import SQLAlchemy
-import os
 
 app = Flask(__name__)
 
-# --- DATABASE CONFIGURATION ---
-# This creates a 'students.db' file in your project directory
-basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'students.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Temporary list to store student data
+students_db = []
 
-db = SQLAlchemy(app)
-
-# --- DATABASE MODEL ---
-class Student(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    section = db.Column(db.String(50), nullable=False)
-    grade = db.Column(db.Float, nullable=False)
-    status = db.Column(db.String(20), nullable=False)
-
-# Create the database tables
-with app.app_context():
-    db.create_all()
-
-# --- HTML TEMPLATE ---
+# --- VERTICAL CLEAN HTML & CSS ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GradePortal | Database Edition</title>
+    <title>GradePortal | Pro</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -62,11 +43,15 @@ HTML_TEMPLATE = """
             gap: 20px;
         }
 
-        .header { text-align: center; padding: 10px 0; }
-        .header h1 { font-size: 1.6rem; margin: 0; font-weight: 700; }
+        .header {
+            padding: 10px 0;
+            text-align: center;
+        }
+
+        .header h1 { font-size: 1.6rem; margin: 0; font-weight: 700; letter-spacing: -1px; }
         .header span { color: var(--accent); }
 
-        /* Input Form */
+        /* Form Card */
         .input-card {
             background: var(--surface);
             padding: 25px;
@@ -77,66 +62,141 @@ HTML_TEMPLATE = """
 
         .form-group { margin-bottom: 18px; }
         .form-group label { 
-            display: block; font-size: 0.75rem; color: var(--text-secondary); 
-            margin-bottom: 8px; font-weight: 700; text-transform: uppercase;
+            display: block; 
+            font-size: 0.75rem; 
+            color: var(--text-secondary); 
+            margin-bottom: 8px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
         }
 
         input { 
-            width: 100%; padding: 14px; background: #151e2f;
-            border: 1px solid #334155; border-radius: 12px; color: white;
-            box-sizing: border-box; font-size: 1rem;
+            width: 100%; 
+            padding: 14px; 
+            background: #151e2f;
+            border: 1px solid #334155; 
+            border-radius: 12px; 
+            color: white;
+            box-sizing: border-box;
+            font-size: 1rem;
+            transition: 0.2s;
         }
 
-        input:focus { outline: none; border-color: var(--accent); }
+        input:focus { 
+            outline: none; 
+            border-color: var(--accent); 
+            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15);
+        }
 
         .submit-btn {
-            width: 100%; padding: 16px; background: var(--accent);
-            color: white; border: none; border-radius: 12px;
-            font-weight: 700; cursor: pointer; font-size: 1rem;
+            width: 100%;
+            padding: 16px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 1rem;
         }
+
+        .submit-btn:hover { background: #7c3aed; transform: translateY(-1px); }
 
         /* List Section */
-        .list-section { display: flex; flex-direction: column; gap: 12px; }
-        .section-header { display: flex; justify-content: space-between; align-items: center; }
-        .section-label { font-size: 0.75rem; color: var(--text-secondary); font-weight: 800; }
-
-        .clear-btn {
-            background: transparent; border: 1px solid #334155; color: var(--text-secondary);
-            padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; cursor: pointer; text-decoration: none;
+        .list-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
-        .clear-btn:hover { background: var(--fail-color); color: white; border-color: var(--fail-color); }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 5px;
+        }
+
+        .section-label {
+            font-size: 0.75rem; 
+            color: var(--text-secondary); 
+            font-weight: 800;
+            text-transform: uppercase;
+        }
 
         .student-card {
-            background: var(--surface); padding: 16px; border-radius: 20px;
-            display: flex; align-items: center; justify-content: space-between;
+            background: var(--surface);
+            padding: 16px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             border: 1px solid rgba(255,255,255,0.05);
+            transition: 0.3s;
         }
 
-        .info-box { display: flex; flex-direction: column; }
+        .student-card:hover { border-color: rgba(255,255,255,0.15); }
+
+        .info-box { display: flex; flex-direction: column; gap: 2px; }
         .info-box .name { font-weight: 700; font-size: 1.05rem; }
         .info-box .section-name { font-size: 0.8rem; color: var(--text-secondary); }
         
+        /* Status Badge */
         .status-chip {
-            font-size: 0.6rem; font-weight: 800; padding: 2px 8px; border-radius: 6px;
-            margin-top: 5px; width: fit-content;
+            font-size: 0.65rem;
+            font-weight: 800;
+            padding: 2px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            width: fit-content;
+            margin-top: 4px;
         }
 
+        .right-box { display: flex; align-items: center; gap: 15px; }
+
+        .grade-circle {
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1rem;
+        }
+
+        /* Pass/Fail Styles */
+        .is-pass .grade-circle { background: rgba(34, 197, 94, 0.1); color: var(--pass-color); border: 1px solid rgba(34, 197, 94, 0.2); }
         .is-pass .status-chip { background: var(--pass-color); color: #052e16; }
+
+        .is-fail .grade-circle { background: rgba(239, 68, 68, 0.1); color: var(--fail-color); border: 1px solid rgba(239, 68, 68, 0.2); }
         .is-fail .status-chip { background: var(--fail-color); color: #450a0a; }
 
-        .grade-box {
-            width: 42px; height: 42px; border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 800; font-size: 0.9rem; margin-right: 12px;
+        .remove-action-btn {
+            background: #2d3748;
+            color: #cbd5e0;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-weight: bold;
+            transition: 0.2s;
         }
 
-        .is-pass .grade-box { background: rgba(34, 197, 94, 0.1); color: var(--pass-color); }
-        .is-fail .grade-box { background: rgba(239, 68, 68, 0.1); color: var(--fail-color); }
+        .remove-action-btn:hover { background: var(--fail-color); color: white; }
 
-        .delete-btn {
-            color: #4a5568; text-decoration: none; font-size: 1.4rem; font-weight: bold;
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+            border: 2px dashed rgba(255,255,255,0.05);
+            border-radius: 20px;
         }
-        .delete-btn:hover { color: var(--fail-color); }
     </style>
 </head>
 <body>
@@ -149,27 +209,25 @@ HTML_TEMPLATE = """
     <div class="input-card">
         <form action="/add" method="POST">
             <div class="form-group">
-                <label>Student Name</label>
-                <input type="text" name="name" required>
+                <label>FULL NAME</label>
+                <input type="text" name="name" placeholder="Ex. Juan Dela Cruz" required>
             </div>
             <div class="form-group">
-                <label>Section</label>
-                <input type="text" name="section" required>
+                <label>SECTION</label>
+                <input type="text" name="section" placeholder="Ex. 12 - STEM A" required>
             </div>
             <div class="form-group">
-                <label>Final Grade</label>
-                <input type="number" step="0.1" name="grade" required>
+                <label>FINAL GRADE</label>
+                <input type="number" step="0.1" name="grade" placeholder="0 - 100" required>
             </div>
-            <button type="submit" class="submit-btn">Add to Database</button>
+            <button type="submit" class="submit-btn">Save Student</button>
         </form>
     </div>
 
     <div class="list-section">
         <div class="section-header">
-            <span class="section-label">Database Records</span>
-            {% if students %}
-            <a href="/clear" class="clear-btn" onclick="return confirm('Delete ALL records?')">Clear All</a>
-            {% endif %}
+            <span class="section-label">Records</span>
+            <span style="font-size: 0.75rem; color: var(--text-secondary);">{{ students|length }} Total</span>
         </div>
         
         {% for s in students %}
@@ -180,12 +238,22 @@ HTML_TEMPLATE = """
                 <span class="status-chip">{{ s.status }}</span>
             </div>
             
-            <div style="display: flex; align-items: center;">
-                <div class="grade-box">{{ s.grade|int }}</div>
-                <a href="/delete/{{ s.id }}" class="delete-btn" onclick="return confirm('Delete this record?')">&times;</a>
+            <div class="right-box">
+                <div class="grade-circle">
+                    {{ s.grade|round|int }}
+                </div>
+                <a href="/delete/{{ loop.index0 }}" class="remove-action-btn" onclick="return confirm('Remove this student?')">
+                    &times;
+                </a>
             </div>
         </div>
         {% endfor %}
+        
+        {% if not students %}
+        <div class="empty-state">
+            No records found.
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -193,13 +261,9 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# --- ROUTES ---
-
 @app.route('/')
 def index():
-    # Fetch students from DB ordered by ID descending (newest first)
-    students = Student.query.order_by(Student.id.desc()).all()
-    return render_template_string(HTML_TEMPLATE, students=students)
+    return render_template_string(HTML_TEMPLATE, students=students_db)
 
 @app.route('/add', methods=['POST'])
 def add_student():
@@ -207,29 +271,24 @@ def add_student():
     section = request.form.get('section')
     try:
         grade = float(request.form.get('grade', 0))
-    except:
+    except (ValueError, TypeError):
         grade = 0.0
 
     status = "PASSED" if grade >= 75 else "FAILED"
 
-    new_student = Student(name=name, section=section, grade=grade, status=status)
-    db.session.add(new_student)
-    db.session.commit()
-    
+    # Insert at the beginning so the newest record is at the top
+    students_db.insert(0, {
+        "name": name,
+        "section": section,
+        "grade": grade,
+        "status": status
+    })
     return redirect(url_for('index'))
 
-@app.route('/delete/<int:id>')
-def delete_student(id):
-    student = Student.query.get(id)
-    if student:
-        db.session.delete(student)
-        db.session.commit()
-    return redirect(url_for('index'))
-
-@app.route('/clear')
-def clear_all():
-    db.session.query(Student).delete()
-    db.session.commit()
+@app.route('/delete/<int:student_id>')
+def delete_student(student_id):
+    if 0 <= student_id < len(students_db):
+        students_db.pop(student_id)
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
