@@ -1,27 +1,47 @@
 from flask import Flask, render_template_string, request, redirect, url_for
+from flask_sqlalchemy import SQLAlchemy
+import os
 
 app = Flask(__name__)
 
-# Temporary list to store student data
-students_db = []
+# --- DATABASE CONFIGURATION ---
+# This creates a 'students.db' file in your project directory
+basedir = os.path.abspath(os.path.dirname(__file__))
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'students.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- VERTICAL MODERN HTML & CSS ---
+db = SQLAlchemy(app)
+
+# --- DATABASE MODEL ---
+class Student(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    section = db.Column(db.String(50), nullable=False)
+    grade = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(20), nullable=False)
+
+# Create the database tables
+with app.app_context():
+    db.create_all()
+
+# --- HTML TEMPLATE ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GradePortal | Vertical</title>
+    <title>GradePortal | Database Edition</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --accent: #8b5cf6;
-            --accent-soft: rgba(139, 92, 246, 0.1);
             --bg: #0f172a;
             --surface: #1e293b;
             --text-primary: #f8fafc;
             --text-secondary: #94a3b8;
+            --pass-color: #22c55e;
+            --fail-color: #ef4444;
         }
 
         body { 
@@ -36,123 +56,87 @@ HTML_TEMPLATE = """
 
         .app-container {
             width: 100%;
-            max-width: 450px; /* Constrained width for a vertical "App" look */
+            max-width: 480px; 
             display: flex;
             flex-direction: column;
             gap: 20px;
         }
 
-        .header {
-            padding: 20px 0;
-            text-align: center;
-        }
-
-        .header h1 { font-size: 1.5rem; margin: 0; font-weight: 700; }
+        .header { text-align: center; padding: 10px 0; }
+        .header h1 { font-size: 1.6rem; margin: 0; font-weight: 700; }
         .header span { color: var(--accent); }
 
-        /* Stats Row */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-
-        .stat-card {
-            background: var(--surface);
-            padding: 15px;
-            border-radius: 16px;
-            text-align: center;
-            border: 1px solid rgba(255,255,255,0.05);
-        }
-
-        .stat-card small { color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; }
-        .stat-card div { font-size: 1.25rem; font-weight: 700; margin-top: 5px; }
-
-        /* Vertical Form */
+        /* Input Form */
         .input-card {
             background: var(--surface);
             padding: 25px;
-            border-radius: 20px;
+            border-radius: 24px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.05);
         }
 
         .form-group { margin-bottom: 18px; }
         .form-group label { 
-            display: block; 
-            font-size: 0.8rem; 
-            color: var(--text-secondary); 
-            margin-bottom: 8px;
-            font-weight: 600;
+            display: block; font-size: 0.75rem; color: var(--text-secondary); 
+            margin-bottom: 8px; font-weight: 700; text-transform: uppercase;
         }
 
         input { 
-            width: 100%; 
-            padding: 14px; 
-            background: #151e2f;
-            border: 1px solid #334155; 
-            border-radius: 12px; 
-            color: white;
-            box-sizing: border-box;
-            font-size: 1rem;
+            width: 100%; padding: 14px; background: #151e2f;
+            border: 1px solid #334155; border-radius: 12px; color: white;
+            box-sizing: border-box; font-size: 1rem;
         }
 
-        input:focus { outline: none; border-color: var(--accent); background: #1a2438; }
+        input:focus { outline: none; border-color: var(--accent); }
 
         .submit-btn {
-            width: 100%;
-            padding: 16px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: 0.2s;
-            margin-top: 10px;
+            width: 100%; padding: 16px; background: var(--accent);
+            color: white; border: none; border-radius: 12px;
+            font-weight: 700; cursor: pointer; font-size: 1rem;
         }
-
-        .submit-btn:hover { opacity: 0.9; transform: scale(0.98); }
 
         /* List Section */
-        .list-section {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
+        .list-section { display: flex; flex-direction: column; gap: 12px; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; }
+        .section-label { font-size: 0.75rem; color: var(--text-secondary); font-weight: 800; }
 
-        .student-item {
-            background: var(--surface);
-            padding: 15px;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+        .clear-btn {
+            background: transparent; border: 1px solid #334155; color: var(--text-secondary);
+            padding: 4px 10px; border-radius: 8px; font-size: 0.7rem; cursor: pointer; text-decoration: none;
+        }
+        .clear-btn:hover { background: var(--fail-color); color: white; border-color: var(--fail-color); }
+
+        .student-card {
+            background: var(--surface); padding: 16px; border-radius: 20px;
+            display: flex; align-items: center; justify-content: space-between;
             border: 1px solid rgba(255,255,255,0.05);
-            transition: 0.3s;
         }
 
-        .student-info { display: flex; flex-direction: column; }
-        .student-info .name { font-weight: 700; font-size: 1rem; }
-        .student-info .meta { font-size: 0.8rem; color: var(--text-secondary); }
-
-        .grade-pill {
-            padding: 6px 12px;
-            border-radius: 10px;
-            font-weight: 700;
-            font-size: 0.85rem;
-            min-width: 45px;
-            text-align: center;
+        .info-box { display: flex; flex-direction: column; }
+        .info-box .name { font-weight: 700; font-size: 1.05rem; }
+        .info-box .section-name { font-size: 0.8rem; color: var(--text-secondary); }
+        
+        .status-chip {
+            font-size: 0.6rem; font-weight: 800; padding: 2px 8px; border-radius: 6px;
+            margin-top: 5px; width: fit-content;
         }
 
-        .pass { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
-        .fail { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+        .is-pass .status-chip { background: var(--pass-color); color: #052e16; }
+        .is-fail .status-chip { background: var(--fail-color); color: #450a0a; }
 
-        .delete-icon {
-            color: var(--text-secondary);
-            text-decoration: none;
-            margin-left: 15px;
-            font-size: 1.2rem;
+        .grade-box {
+            width: 42px; height: 42px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 0.9rem; margin-right: 12px;
         }
+
+        .is-pass .grade-box { background: rgba(34, 197, 94, 0.1); color: var(--pass-color); }
+        .is-fail .grade-box { background: rgba(239, 68, 68, 0.1); color: var(--fail-color); }
+
+        .delete-btn {
+            color: #4a5568; text-decoration: none; font-size: 1.4rem; font-weight: bold;
+        }
+        .delete-btn:hover { color: var(--fail-color); }
     </style>
 </head>
 <body>
@@ -162,63 +146,46 @@ HTML_TEMPLATE = """
         <h1>Grade<span>Portal</span></h1>
     </div>
 
-    <div class="stats-grid">
-        <div class="stat-card">
-            <small>Total Students</small>
-            <div>{{ students|length }}</div>
-        </div>
-        <div class="stat-card">
-            <small>Class Avg</small>
-            <div>
-                {% if students %}
-                    {{ (students|map(attribute='grade')|sum / students|length)|round(1) }}%
-                {% else %}
-                    0%
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
     <div class="input-card">
         <form action="/add" method="POST">
             <div class="form-group">
-                <label>STUDENT NAME</label>
-                <input type="text" name="name" placeholder="Enter full name" required>
+                <label>Student Name</label>
+                <input type="text" name="name" required>
             </div>
             <div class="form-group">
-                <label>SECTION</label>
-                <input type="text" name="section" placeholder="e.g. Grade 12 - Zeus" required>
+                <label>Section</label>
+                <input type="text" name="section" required>
             </div>
             <div class="form-group">
-                <label>FINAL GRADE</label>
-                <input type="number" step="0.1" name="grade" placeholder="0.0" required>
+                <label>Final Grade</label>
+                <input type="number" step="0.1" name="grade" required>
             </div>
-            <button type="submit" class="submit-btn">Save Student Record</button>
+            <button type="submit" class="submit-btn">Add to Database</button>
         </form>
     </div>
 
     <div class="list-section">
-        <label style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 700;">RECENT RECORDS</label>
+        <div class="section-header">
+            <span class="section-label">Database Records</span>
+            {% if students %}
+            <a href="/clear" class="clear-btn" onclick="return confirm('Delete ALL records?')">Clear All</a>
+            {% endif %}
+        </div>
+        
         {% for s in students %}
-        <div class="student-item">
-            <div class="student-info">
+        <div class="student-card {{ 'is-pass' if s.status == 'PASSED' else 'is-fail' }}">
+            <div class="info-box">
                 <span class="name">{{ s.name }}</span>
-                <span class="meta">{{ s.section }}</span>
+                <span class="section-name">{{ s.section }}</span>
+                <span class="status-chip">{{ s.status }}</span>
             </div>
+            
             <div style="display: flex; align-items: center;">
-                <div class="grade-pill {{ 'pass' if s.status == 'PASSED' else 'fail' }}">
-                    {{ s.grade }}
-                </div>
-                <a href="/delete/{{ loop.index0 }}" class="delete-icon" onclick="return confirm('Delete record?')">×</a>
+                <div class="grade-box">{{ s.grade|int }}</div>
+                <a href="/delete/{{ s.id }}" class="delete-btn" onclick="return confirm('Delete this record?')">&times;</a>
             </div>
         </div>
         {% endfor %}
-        
-        {% if not students %}
-        <p style="text-align: center; color: var(--text-secondary); font-size: 0.9rem; margin-top: 20px;">
-            No records yet.
-        </p>
-        {% endif %}
     </div>
 </div>
 
@@ -226,9 +193,13 @@ HTML_TEMPLATE = """
 </html>
 """
 
+# --- ROUTES ---
+
 @app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE, students=students_db)
+    # Fetch students from DB ordered by ID descending (newest first)
+    students = Student.query.order_by(Student.id.desc()).all()
+    return render_template_string(HTML_TEMPLATE, students=students)
 
 @app.route('/add', methods=['POST'])
 def add_student():
@@ -236,23 +207,29 @@ def add_student():
     section = request.form.get('section')
     try:
         grade = float(request.form.get('grade', 0))
-    except ValueError:
+    except:
         grade = 0.0
 
     status = "PASSED" if grade >= 75 else "FAILED"
 
-    students_db.append({
-        "name": name,
-        "section": section,
-        "grade": grade,
-        "status": status
-    })
+    new_student = Student(name=name, section=section, grade=grade, status=status)
+    db.session.add(new_student)
+    db.session.commit()
+    
     return redirect(url_for('index'))
 
-@app.route('/delete/<int:student_id>')
-def delete_student(student_id):
-    if 0 <= student_id < len(students_db):
-        students_db.pop(student_id)
+@app.route('/delete/<int:id>')
+def delete_student(id):
+    student = Student.query.get(id)
+    if student:
+        db.session.delete(student)
+        db.session.commit()
+    return redirect(url_for('index'))
+
+@app.route('/clear')
+def clear_all():
+    db.session.query(Student).delete()
+    db.session.commit()
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
